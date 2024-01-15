@@ -266,8 +266,8 @@ function Invoke-CMKChangeActivation {
         $activationStatus = Invoke-CMKApiCall -Method Get -Uri "/objects/activation_run/$($CheckMKActivationObject.id)" -Connection $Connection
         $result = [string]($activationStatus.title).split(' ')[-1].replace('.', '')
     }
-    until (($result -eq 'completed') -or ($AttemptForCompletion -gt $maximumAttemptsForCompletion))
-    If (($result -ne 'completed')) {
+    until (([bool]($activationStatus.extensions.is_running) -eq $false) -or ($AttemptForCompletion -gt $maximumAttemptsForCompletion))
+    If (($result -ne 'complete')) {
         Write-Verbose "Die Aktivierung der Änderungen konnte nicht innerhalb von $maximumAttemptsForCompletion abgeschlossen werden. Result: $Result"
         return $false
     }
