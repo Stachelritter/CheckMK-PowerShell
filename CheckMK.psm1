@@ -226,6 +226,15 @@ function Get-CMKServerInfo {
     )
     return Invoke-CMKApiCall -Method Get -Uri '/version' -Connection $Connection
 }
+function Get-CMKPendingChanges {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $Connection
+    )
+    return Invoke-CMKApiCall -Method Get -Uri '/domain-types/activation_run/collections/pending_changes' -Connection $Connection
+}
 function Invoke-CMKChangeActivation {
     [CmdletBinding()]
     param(
@@ -652,5 +661,6 @@ $ExportableFunctions = @(
     'Get-CMKDowntime'
     'New-CMKDowntime'
     'Remove-CMKDowntime'
+	'Get-CMKPendingChanges'
 )
 Export-ModuleMember -Function $ExportableFunctions
