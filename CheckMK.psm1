@@ -511,7 +511,7 @@ function Get-CMKDowntime {
     If ($HostName) {
         $QueryExtension += "host_name=$($HostName)"
     }
-    return Invoke-CMKApiCall -Method Get -Uri "/domain-types/downtime/collections/all$($QueryExtension)" -Connection $Connection
+    return Invoke-CMKApiCall -Method Get -Uri "/domain-types/downtime/collections/all$($QueryExtension)" -Connection $Connection -EndpointReturnsList
 }
 function New-CMKDowntime {
     [CmdletBinding()]
@@ -618,6 +618,7 @@ function Remove-CMKDowntime {
     If ($PSCmdlet.ParameterSetName -eq 'byID') {
         $Delete.delete_type = 'by_id'
         $Delete.downtime_id = "$ID"
+		$Delete.site_id = "$($Connection.sitename)"
     }
     elseif ($PSCmdlet.ParameterSetName -eq 'byHostName') {
         $Delete.delete_type = 'params'
