@@ -238,6 +238,9 @@ function Get-CMKPendingChanges {
 function Invoke-CMKChangeActivation {
     [CmdletBinding()]
     param(
+	    [Parameter(Mandatory, HelpMessage = 'Abgerufen mit Get-CMKPendingChanges')]
+        [object]
+        $PendingChanges,
         [parameter(HelpMessage = 'Sollen durch andere Nutzer durchgeführte Änderungen mit Aktiviert werden? Pflicht, wenn es welche gibt.')]
         [switch]
         $ForceForeignChanges,
@@ -250,7 +253,8 @@ function Invoke-CMKChangeActivation {
         redirect              = $false
         sites                 = [array]$Connection.sitename
     } | ConvertTo-Json
-    $CheckMKActivationObject = Invoke-CMKApiCall -Method Post -Uri '/domain-types/activation_run/actions/activate-changes/invoke' -Body $activateChanges -Connection $Connection
+    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $PendingChanges.Etag
+    $CheckMKActivationObject = Invoke-CMKApiCall -Method Post -Uri '/domain-types/activation_run/actions/activate-changes/invoke' -Body $activateChanges -Connection $oneTimeConnection
     if (-not $CheckMKActivationObject) {
         return $false
     }
