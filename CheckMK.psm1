@@ -144,7 +144,7 @@ function Invoke-CustomWebRequest {
     # Diese Funktion ist notwendig, da Invoke-WebRequest bei Statuscodes -ne 200 einen Fehler wirft.
     # Mit Powershell 7 erhält Invoke-Webrequest einen neuen Parameter: -SkipHttpErrorCheck. Damit wäre das hier vermutlich überflüssig.
     Set-CertificateValidationPolicy
-
+    $PSBoundParameters.Add('UseBasicParsing', $true)
     $BaseResponse = try {
         $PrimaryResponse = Invoke-WebRequest @PSBoundParameters
         $PrimaryResponse.BaseResponse
