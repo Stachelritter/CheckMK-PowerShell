@@ -648,6 +648,37 @@ function Remove-CMKDowntime {
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/downtime/actions/delete/invoke' -Body $Delete -Connection $Connection
 }
 #endregion Downtimes
+#region Services
+function Get-CMKAllServices {
+    [CmdletBinding()]
+    param (
+        [Parameter(HelpMessage = 'Filter-Ausdruck für service description als regular expression. Beispiel: "^Filesystem(.)+" (listet alle Services auf, die mit "Filesystem" beginnen)')]
+        $DescriptionRegExp,
+        [Parameter(HelpMessage = 'auszugebende Felder')]
+        [ValidateSet('host_name', 'description', 'state', 'plugin_output')]
+        $Columns = @("host_name", "description"),
+        $Connection
+    )
+
+    $QueryExtension = ''
+    If ($DescriptionRegExp -or $Columns) {
+        $QueryExtension += '?'
+    }
+
+    If ($DescriptionRegExp) {
+        $QueryExtension += "query={""op"": ""~"", ""left"": ""description"", ""right"": ""$DescriptionRegExp""}"
+    }
+
+    If ($Columns) {
+        foreach($col in $Columns)
+        {
+            $QueryExtension += "&columns=$col"
+        }
+    }
+	
+    return Invoke-CMKApiCall -Method Get -Uri "/domain-types/service/collections/all$($QueryExtension)" -Connection $Connection -EndpointReturnsList
+}
+#endregion Services
 $ExportableFunctions = @(
     'Get-CMKConnection'
     'Invoke-CMKApiCall'
@@ -665,6 +696,7 @@ $ExportableFunctions = @(
     'Get-CMKDowntime'
     'New-CMKDowntime'
     'Remove-CMKDowntime'
-	'Get-CMKPendingChanges'
+    'Get-CMKPendingChanges'
+    'Get-CMKAllServices'
 )
 Export-ModuleMember -Function $ExportableFunctions
