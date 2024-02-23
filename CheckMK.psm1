@@ -650,6 +650,21 @@ function Remove-CMKDowntime {
 #endregion Downtimes
 #region Services
 function Get-CMKAllServices {
+<#
+    .SYNOPSIS
+        Retrieve status of ALL services
+    .DESCRIPTION
+        retrieve status of all services. Filter by regular expression on service description using parameter -DescriptionRegExp.
+    .PARAMETER DescriptionRegExp
+        filter on service description by regular expression
+    .PARAMETER Columns 
+        control which fields should be returned
+    .EXAMPLE
+        Get-CMKAllServices -DescriptionRegExp "^Filesystem(.)+" -Columns host_name, description, state -Connection $Connection
+            list all services beginning with "Filesystem" and output host_name, description and state
+    .LINK
+        https://<CheckMK-Host>/<sitename>/check_mk/openapi/#operation/cmk.gui.plugins.openapi.endpoints.service._list_all_services
+#>
     [CmdletBinding()]
     param (
         [Parameter(HelpMessage = 'Filter-Ausdruck für service description als regular expression. Beispiel: "^Filesystem(.)+" (listet alle Services auf, die mit "Filesystem" beginnen)')]
