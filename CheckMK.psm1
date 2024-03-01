@@ -111,9 +111,8 @@ function Get-CMKHeader {
         Write-Host 'Es existiert keine Passwortdatei für ihren Benutzer oder sie war zu alt. Diese muss in Ihrem Profil nun generiert werden!' -BackgroundColor Red
         Read-Host -AsSecureString "Bitte Passwort des Benutzers `"$($username)`" eingeben" | ConvertFrom-SecureString | Out-File $pwdpath
     }
-    $password = Get-Content $pwdpath | ConvertTo-SecureString
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password)
-    $password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    # Ab PS7 wird ConvertFrom-SecureString möglich
+    $password = [System.Net.NetworkCredential]::new("", (Get-Content $pwdpath | ConvertTo-SecureString)).Password
 
     $header = New-Object -TypeName 'System.Collections.Generic.Dictionary[[string],[string]]'
     $header.Add('Authorization', "Bearer $username $password")
