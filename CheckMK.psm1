@@ -111,9 +111,8 @@ function Get-CMKHeader {
         Write-Host 'Es existiert keine Passwortdatei für ihren Benutzer oder sie war zu alt. Diese muss in Ihrem Profil nun generiert werden!' -BackgroundColor Red
         Read-Host -AsSecureString "Bitte Passwort des Benutzers `"$($username)`" eingeben" | ConvertFrom-SecureString | Out-File $pwdpath
     }
-    $password = Get-Content $pwdpath | ConvertTo-SecureString
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password)
-    $password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    # Ab PS7 wird ConvertFrom-SecureString möglich
+    $password = [System.Net.NetworkCredential]::new("", (Get-Content $pwdpath | ConvertTo-SecureString)).Password
 
     $header = New-Object -TypeName 'System.Collections.Generic.Dictionary[[string],[string]]'
     $header.Add('Authorization', "Bearer $username $password")
@@ -183,9 +182,9 @@ function Invoke-CMKApiCall {
     # Wandelt das Ergebnis einer CustomWebRequest zu einem Objekt.
     # Schlägt der Aufruf fehl, wird nur $false zurückgegeben.
 
-    If (-not (Test-Connection -ComputerName $Connection.Hostname -Count 1 -Quiet)) {
-        Write-Verbose "$($Connection.Hostname) ist nicht erreichbar (icmp ping)"
-        return $false #todo (Fehler werfen!, nicht false)
+    If (-not (Test-NetConnection -ComputerName $Connection.Hostname -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded) {
+        Write-Verbose "$($Connection.Hostname) ist nicht erreichbar"
+        throw [System.Net.WebException]
     }
 
     $PSBoundParameters.Headers = $Connection.Header
