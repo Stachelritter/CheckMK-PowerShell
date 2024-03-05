@@ -182,9 +182,9 @@ function Invoke-CMKApiCall {
     # Wandelt das Ergebnis einer CustomWebRequest zu einem Objekt.
     # Schlägt der Aufruf fehl, wird nur $false zurückgegeben.
 
-    If (-not (Test-Connection -ComputerName $Connection.Hostname -Count 1 -Quiet)) {
-        Write-Verbose "$($Connection.Hostname) ist nicht erreichbar (icmp ping)"
-        return $false #todo (Fehler werfen!, nicht false)
+    If (-not (Test-NetConnection -ComputerName $Connection.Hostname -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded) {
+        Write-Verbose "$($Connection.Hostname) ist nicht erreichbar"
+        throw [System.Net.WebException]
     }
 
     $PSBoundParameters.Headers = $Connection.Header
