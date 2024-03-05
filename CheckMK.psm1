@@ -647,6 +647,67 @@ function Remove-CMKDowntime {
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/downtime/actions/delete/invoke' -Body $Delete -Connection $Connection
 }
 #endregion Downtimes
+#region Services
+function Get-CMKService {
+    <#
+    .SYNOPSIS
+        Retrieve status of services
+    .DESCRIPTION
+        retrieve status of services. Filter by regular expression on service description using parameter -DescriptionRegExp and/or hostname.
+    .PARAMETER DescriptionRegExp
+        filter on service description by regular expression
+    .PARAMETER Columns 
+        control which fields should be returned
+    .PARAMETER HostName
+        control services of which host should be returned
+    .EXAMPLE
+        Get-CMKAllServices -DescriptionRegExp "^Filesystem(.)+" -Columns host_name, description, state -Connection $Connection
+            list all services beginning with "Filesystem" and output host_name, description and state
+    .LINK
+        https://<CheckMK-Host>/<sitename>/check_mk/openapi/#operation/cmk.gui.plugins.openapi.endpoints.service._list_all_services
+#>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, ParameterSetName = 'byHostName', HelpMessage = 'Zeige Services nur eines Hosts')]
+        $HostName,
+        [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'Filter-Ausdruck für service description als regular expression. Beispiel: "^Filesystem(.)+" (listet alle Services auf, die mit "Filesystem" beginnen)')]
+        [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter-Ausdruck für service description als regular expression. Beispiel: "^Filesystem(.)+" (listet alle Services auf, die mit "Filesystem" beginnen)')]
+        [ValidateNotNullOrEmpty()]
+        $DescriptionRegExp,
+        [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'auszugebende Felder')]
+        [Parameter(ParameterSetName = 'All', HelpMessage = 'auszugebende Felder')]
+        [ValidateSet('host_name', 'description', 'state', 'plugin_output')]
+        $Columns = @('host_name', 'description'),
+        [Parameter(Mandatory, ParameterSetName = 'byHostName')]
+        [Parameter(Mandatory, ParameterSetName = 'All')]
+        [object]
+        $Connection
+    )
+
+    $QueryExtension = ''
+    If ($DescriptionRegExp -or $Columns) {
+        $QueryExtension += '?'
+    }
+
+    If ($DescriptionRegExp) {
+        $QueryExtension += "query={""op"": ""~"", ""left"": ""description"", ""right"": ""$DescriptionRegExp""}"
+    }
+
+    If ($Columns) {
+        foreach ($col in $Columns) {
+		 
+            $QueryExtension += "&columns=$col"
+        }
+    }
+	
+    If ($PSCmdlet.ParameterSetName -eq 'byHostName') {
+        return Invoke-CMKApiCall -Method Get -Uri "/objects/host/$($HostName)/collections/services$($QueryExtension)" -Connection $Connection
+    }
+    elseif ($PSCmdlet.ParameterSetName -eq 'All') {
+        return Invoke-CMKApiCall -Method Get -Uri "/domain-types/service/collections/all$($QueryExtension)" -Connection $Connection -EndpointReturnsList
+    }
+}
+#endregion Services
 $ExportableFunctions = @(
     'Get-CMKConnection'
     'Invoke-CMKApiCall'
@@ -664,6 +725,7 @@ $ExportableFunctions = @(
     'Get-CMKDowntime'
     'New-CMKDowntime'
     'Remove-CMKDowntime'
-	'Get-CMKPendingChanges'
+    'Get-CMKPendingChanges'
+    'Get-CMKService'
 )
 Export-ModuleMember -Function $ExportableFunctions
