@@ -55,6 +55,9 @@ function Get-CMKConnection {
         [parameter(HelpMessage = 'Benutzer mit genügend Rechten in CheckMK. Per Standard wird der Skriptausführende Benutzer gewählt.')]
         [string]
         $Username,
+		[parameter(HelpMessage = 'Passwort zum Zugriff auf die CheckMK API.')]
+		[SecureString]
+		$Secret,
         [parameter(HelpMessage = 'Wenn bestehende Objekte bearbeitet werden sollen, muss das ETag des Objektes zuvor abgerufen und bei der Änderungsanfrage in den Header eingefügt werden.')]
         [ValidateNotNullOrEmpty()]
         [string]
@@ -87,32 +90,19 @@ function Get-CMKHeader {
         [ValidateNotNullOrEmpty()]
         [string]
         $Username,
+        [parameter(HelpMessage = 'Passwort zum Zugriff auf die CheckMK API.')]
+        [ValidateNotNullOrEmpty()]
+		[SecureString]
+		$Secret,
         [parameter(HelpMessage = 'Wenn bestehende Objekte bearbeitet werden sollen, muss das ETag des Objektes zuvor abgerufen und bei der Änderungsanfrage in den Header eingefügt werden.')]
         [ValidateNotNullOrEmpty()]
         [string]
         $IfMatch
     )
 
-    $pwdpath = "$($env:USERPROFILE)\Documents\$($username)-$($Hostname)-$($Sitename).pwd"
 
-    If (($env:username -like '*$') -or ($Username -eq 'automation')) { 
-        # Wenn das Skript als System läuft oder der User automation genutzt wird soll das gespeicherte Kennwort nicht ablaufen
-    }
-    else {
-        If (Test-Path -Path $pwdpath) {
-            $Passwortdatei = Get-Item -Path $pwdpath
-            If ($Passwortdatei.LastWriteTime -lt (Get-Date).AddDays(-185)) {
-                Remove-Item -Path $pwdpath
-                Write-Verbose 'Alte Passwortdatei gelöscht'
-            }
-        }
-    }
-    if (-not(Test-Path $pwdpath)) {
-        Write-Host 'Es existiert keine Passwortdatei für ihren Benutzer oder sie war zu alt. Diese muss in Ihrem Profil nun generiert werden!' -BackgroundColor Red
-        Read-Host -AsSecureString "Bitte Passwort des Benutzers `"$($username)`" eingeben" | ConvertFrom-SecureString | Out-File $pwdpath
-    }
-    # Ab PS7 wird ConvertFrom-SecureString möglich
-    $password = [System.Net.NetworkCredential]::new("", (Get-Content $pwdpath | ConvertTo-SecureString)).Password
+	# Ab PS7 wird ConvertFrom-SecureString möglich
+    $password = [System.Net.NetworkCredential]::new("", $Secret).Password
 
     $header = New-Object -TypeName 'System.Collections.Generic.Dictionary[[string],[string]]'
     $header.Add('Authorization', "Bearer $username $password")
