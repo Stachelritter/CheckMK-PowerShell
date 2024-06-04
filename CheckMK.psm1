@@ -643,16 +643,29 @@ function Get-CMKService {
     .SYNOPSIS
         Retrieve status of services
     .DESCRIPTION
-        retrieve status of services. Filter by regular expression on service description using parameter -DescriptionRegExp and/or hostname.
+        retrieve status of services. Filter by host name, state and/or regular expression on service description using parameter -DescriptionRegExp.
     .PARAMETER DescriptionRegExp
         filter on service description by regular expression
+	.PARAMETER State
+		filter on service state (CRIT, WARN, OK, UNKNOWN)
+		multiple choices are possible
     .PARAMETER Columns 
         control which fields should be returned
     .PARAMETER HostName
         control services of which host should be returned
+	.EXAMPLE
+		Get-CMKService -HostName myhost.domain.example -Connection $Connection
+			List all services of one host.
     .EXAMPLE
-        Get-CMKAllServices -DescriptionRegExp "^Filesystem(.)+" -Columns host_name, description, state -Connection $Connection
-            list all services beginning with "Filesystem" and output host_name, description and state
+        Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -Columns host_name, description, state -Connection $Connection
+            List all services of all hosts beginning with "Filesystem" and output host_name, description and state
+	.EXAMPLE
+		Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -State CRIT, WARN -Columns host_name, description, state -Connection $Connection
+			List all services beginning with "Filesystem", having state CRIT or WARN and output host_name, description and state
+	.EXAMPLE
+		Get-CMKService -State CRIT -Connection $Connection
+			List all services having a critical state.
+			Output default columns: host_name and description
     .LINK
         https://<CheckMK-Host>/<sitename>/check_mk/openapi/#operation/cmk.gui.plugins.openapi.endpoints.service._list_all_services
 #>
@@ -664,6 +677,10 @@ function Get-CMKService {
         [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter-Ausdruck für service description als regular expression. Beispiel: "^Filesystem(.)+" (listet alle Services auf, die mit "Filesystem" beginnen)')]
         [ValidateNotNullOrEmpty()]
         $DescriptionRegExp,
+        [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'Filter auf Service state (OK, WARN, CRIT, UNKNOWN)')]
+        [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter auf Service state (OK, WARN, CRIT, UNKNOWN)')]
+        [ValidateSet('', 'OK', 'WARN', 'CRIT', 'UNKNOWN')]
+        [string[]]$State,
         [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'auszugebende Felder')]
         [Parameter(ParameterSetName = 'All', HelpMessage = 'auszugebende Felder')]
         [ValidateSet('host_name', 'description', 'state', 'plugin_output')]
@@ -675,12 +692,53 @@ function Get-CMKService {
     )
 
     $QueryExtension = ''
-    If ($DescriptionRegExp -or $Columns) {
-        $QueryExtension += '?'
+    [string[]]$QueryExprArray = @()
+    
+    If ($DescriptionRegExp) {
+        $QueryExprArray += "{""op"": ""~"", ""left"": ""description"", ""right"": ""$DescriptionRegExp""}"
     }
 
-    If ($DescriptionRegExp) {
-        $QueryExtension += "query={""op"": ""~"", ""left"": ""description"", ""right"": ""$DescriptionRegExp""}"
+    #ToDo: expression für State bauen, dann mit Expression für Description kombinieren 
+    If ($State) {
+        $StateExprArray = @()
+        #map service state names to numeric state and add to list 
+        foreach ($i in $State) {
+            $MapState = ""
+            switch ($i) {
+                'OK' { $MapState = "0" }
+                'WARN' { $MapState = "1" }
+                'CRIT' { $MapState = "2" }
+                'UNKNOWN' { $MapState = "3" }
+                Default { Write-Error "state could not be mapped." }
+            }
+            $StateExprArray += "{""op"": ""="", ""left"": ""state"", ""right"": ""$MapState""}"
+        }
+        #build query expression
+        $StateExprList = $StateExprArray -join "," 
+        If ($StateExprArray.Count -gt 1) {
+            $StateExpr += "{""op"": ""and"", ""expr"": [$StateExprList]}"
+        }
+        else {
+            $StateExpr += "$StateExprList"
+        }
+        $QueryExprArray += $StateExpr
+    }
+
+    If ($QueryExprArray.Count -gt 0 -or $Columns) {
+        $QueryExtension += '?'
+    }
+    
+    $QueryExprList = $QueryExprArray -join ","
+
+    #if more than one query expressions are defined, combine with 'and' operator, else use expression directly
+    If ($QueryExprArray.Count -gt 1) {
+        $QueryExtension += "query={""op"": ""and"", ""expr"": [$QueryExprList]}"
+    }
+    else {
+		#do we have a query?
+		If ($QueryExprArray.Count -gt 0) {
+        $QueryExtension += "query=$QueryExprList"
+		}
     }
 
     If ($Columns) {
@@ -689,7 +747,9 @@ function Get-CMKService {
             $QueryExtension += "&columns=$col"
         }
     }
-	
+
+    Write-Verbose $QueryExtension
+
     If ($PSCmdlet.ParameterSetName -eq 'byHostName') {
         return Invoke-CMKApiCall -Method Get -Uri "/objects/host/$($HostName)/collections/services$($QueryExtension)" -Connection $Connection
     }
