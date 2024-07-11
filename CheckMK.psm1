@@ -666,6 +666,9 @@ function Get-CMKService {
 		Get-CMKService -State CRIT -Connection $Connection
 			List all services having a critical state.
 			Output default columns: host_name and description
+    .EXAMPLE
+        Get-CMKService -HostGroup MariaDB, OracleDB -State CRIT -Connection $Connection
+            List all services from host_groups "MariaDB" OR "OracleDB" having a critical state. 
     .LINK
         https://<CheckMK-Host>/<sitename>/check_mk/openapi/#operation/cmk.gui.plugins.openapi.endpoints.service._list_all_services
 #>
@@ -681,9 +684,12 @@ function Get-CMKService {
         [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter auf Service state (OK, WARN, CRIT, UNKNOWN)')]
         [ValidateSet('', 'OK', 'WARN', 'CRIT', 'UNKNOWN')]
         [string[]]$State,
+        [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'Filter host_groups, multiple values accepted (link using logical OR), case-insensitive equality')]
+        [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter host_groups, multiple values accepted (link using logical OR), case-insensitive equality')]
+        [string[]]$HostGroup,
         [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'auszugebende Felder')]
         [Parameter(ParameterSetName = 'All', HelpMessage = 'auszugebende Felder')]
-        [ValidateSet('host_name', 'description', 'state', 'plugin_output')]
+        [ValidateSet('host_name', 'description', 'state', 'plugin_output', 'host_groups')]
         $Columns = @('host_name', 'description'),
         [Parameter(Mandatory, ParameterSetName = 'byHostName')]
         [Parameter(Mandatory, ParameterSetName = 'All')]
@@ -698,7 +704,6 @@ function Get-CMKService {
         $QueryExprArray += "{""op"": ""~"", ""left"": ""description"", ""right"": ""$DescriptionRegExp""}"
     }
 
-    #ToDo: expression für State bauen, dann mit Expression für Description kombinieren 
     If ($State) {
         $StateExprArray = @()
         #map service state names to numeric state and add to list 
@@ -724,6 +729,23 @@ function Get-CMKService {
         $QueryExprArray += $StateExpr
     }
 
+    If ($HostGroup) {
+        $HostGroupExprArray = @()
+        #map service state names to numeric state and add to list 
+        foreach ($i in $HostGroup) {
+            $HostGroupExprArray += "{""op"": ""<="", ""left"": ""host_groups"", ""right"": ""$i""}"
+        }
+        #build query expression
+        $HostGroupExprList = $HostGroupExprArray -join "," 
+        If ($HostGroupExprArray.Count -gt 1) {
+            $HostGroupExpr += "{""op"": ""or"", ""expr"": [$HostGroupExprList]}"
+        }
+        else {
+            $HostGroupExpr += "$HostGroupExprList"
+        }
+        $QueryExprArray += $HostGroupExpr
+    }
+    
     If ($QueryExprArray.Count -gt 0 -or $Columns) {
         $QueryExtension += '?'
     }
