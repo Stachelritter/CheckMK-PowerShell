@@ -716,7 +716,7 @@ function Get-CMKService {
         #build query expression
         $StateExprList = $StateExprArray -join "," 
         If ($StateExprArray.Count -gt 1) {
-            $StateExpr += "{""op"": ""and"", ""expr"": [$StateExprList]}"
+            $StateExpr += "{""op"": ""or"", ""expr"": [$StateExprList]}"
         }
         else {
             $StateExpr += "$StateExprList"
