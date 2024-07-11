@@ -639,33 +639,33 @@ function Remove-CMKDowntime {
 #endregion Downtimes
 #region Services
 function Get-CMKService {
-    <#
+<#
     .SYNOPSIS
         Retrieve status of services
     .DESCRIPTION
         retrieve status of services. Filter by host name, state and/or regular expression on service description using parameter -DescriptionRegExp.
     .PARAMETER DescriptionRegExp
         filter on service description by regular expression
-	.PARAMETER State
-		filter on service state (CRIT, WARN, OK, UNKNOWN)
-		multiple choices are possible
+    .PARAMETER State
+        filter on service state (CRIT, WARN, OK, UNKNOWN)
+        multiple choices are possible
     .PARAMETER Columns 
         control which fields should be returned
     .PARAMETER HostName
         control services of which host should be returned
-	.EXAMPLE
-		Get-CMKService -HostName myhost.domain.example -Connection $Connection
-			List all services of one host.
+    .EXAMPLE
+        Get-CMKService -HostName myhost.domain.example -Connection $Connection
+            List all services of one host.
     .EXAMPLE
         Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -Columns host_name, description, state -Connection $Connection
             List all services of all hosts beginning with "Filesystem" and output host_name, description and state
-	.EXAMPLE
-		Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -State CRIT, WARN -Columns host_name, description, state -Connection $Connection
-			List all services beginning with "Filesystem", having state CRIT or WARN and output host_name, description and state
-	.EXAMPLE
-		Get-CMKService -State CRIT -Connection $Connection
-			List all services having a critical state.
-			Output default columns: host_name and description
+    .EXAMPLE
+        Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -State CRIT, WARN -Columns host_name, description, state -Connection $Connection
+            List all services beginning with "Filesystem", having state CRIT or WARN and output host_name, description and state
+    .EXAMPLE
+        Get-CMKService -State CRIT -Connection $Connection
+            List all services having a critical state.
+            Output default columns: host_name and description
     .EXAMPLE
         Get-CMKService -HostGroup MariaDB, OracleDB -State CRIT -Connection $Connection
             List all services from host_groups "MariaDB" OR "OracleDB" having a critical state. 
@@ -745,7 +745,7 @@ function Get-CMKService {
         }
         $QueryExprArray += $HostGroupExpr
     }
-    
+
     If ($QueryExprArray.Count -gt 0 -or $Columns) {
         $QueryExtension += '?'
     }
@@ -757,15 +757,14 @@ function Get-CMKService {
         $QueryExtension += "query={""op"": ""and"", ""expr"": [$QueryExprList]}"
     }
     else {
-		#do we have a query?
-		If ($QueryExprArray.Count -gt 0) {
+        #do we have a query?
+        If ($QueryExprArray.Count -gt 0) {
         $QueryExtension += "query=$QueryExprList"
-		}
+        }
     }
 
     If ($Columns) {
         foreach ($col in $Columns) {
-		 
             $QueryExtension += "&columns=$col"
         }
     }
