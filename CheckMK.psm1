@@ -137,11 +137,14 @@ function Invoke-CustomWebRequest {
     $BaseResponse = try {
         $PrimaryResponse = Invoke-WebRequest @PSBoundParameters
         $PrimaryResponse.BaseResponse
-    }
-    catch [System.Net.WebException] {
-        Write-Verbose "An exception was caught: $($_.Exception.Message)"
-        $_.Exception.Response # Nur BaseResponse bei Exceptions möglich
-    }
+        }
+        catch [System.Net.WebException] {
+            $ErrMessage =  $_.ErrorDetails.Message;
+            Write-Verbose "An exception was caught: $($_.Exception.Message)"
+            $ResponseErrorObj = $_.Exception.Response # Nur BaseResponse bei Exceptions möglich
+            Add-Member -InputObject $ResponseErrorObj -NotePropertyName ErrorMessage -NotePropertyValue $ErrMessage #add catched error message to $BaseResponse object
+            $ResponseErrorObj
+        }
     $ResponseHash = @{
         BaseResponse = $BaseResponse
         Response     = $PrimaryResponse
@@ -201,7 +204,7 @@ function Invoke-CMKApiCall {
     }
     else {
         # Nicht OK. Error Code lässt sich mit -verbose anzeigen.
-        return $false  #todo (Fehler werfen!, nicht false)
+        throw "StatusCode: $([int]($Response.BaseResponse.StatusCode)) StatusDescription: $($Response.BaseResponse.StatusDescription)`r`nMessage: `r`n$($Response.BaseResponse.ErrorMessage)"
     }
 }
 #endregion Connection
