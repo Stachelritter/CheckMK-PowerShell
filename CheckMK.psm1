@@ -642,33 +642,36 @@ function Remove-CMKDowntime {
 #endregion Downtimes
 #region Services
 function Get-CMKService {
-    <#
+<#
     .SYNOPSIS
         Retrieve status of services
     .DESCRIPTION
         retrieve status of services. Filter by host name, state and/or regular expression on service description using parameter -DescriptionRegExp.
     .PARAMETER DescriptionRegExp
         filter on service description by regular expression
-	.PARAMETER State
-		filter on service state (CRIT, WARN, OK, UNKNOWN)
-		multiple choices are possible
+    .PARAMETER State
+        filter on service state (CRIT, WARN, OK, UNKNOWN)
+        multiple choices are possible
     .PARAMETER Columns 
         control which fields should be returned
     .PARAMETER HostName
         control services of which host should be returned
-	.EXAMPLE
-		Get-CMKService -HostName myhost.domain.example -Connection $Connection
-			List all services of one host.
+    .EXAMPLE
+        Get-CMKService -HostName myhost.domain.example -Connection $Connection
+            List all services of one host.
     .EXAMPLE
         Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -Columns host_name, description, state -Connection $Connection
             List all services of all hosts beginning with "Filesystem" and output host_name, description and state
-	.EXAMPLE
-		Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -State CRIT, WARN -Columns host_name, description, state -Connection $Connection
-			List all services beginning with "Filesystem", having state CRIT or WARN and output host_name, description and state
-	.EXAMPLE
-		Get-CMKService -State CRIT -Connection $Connection
-			List all services having a critical state.
-			Output default columns: host_name and description
+    .EXAMPLE
+        Get-CMKService -DescriptionRegExp "^Filesystem(.)+" -State CRIT, WARN -Columns host_name, description, state -Connection $Connection
+            List all services beginning with "Filesystem", having state CRIT or WARN and output host_name, description and state
+    .EXAMPLE
+        Get-CMKService -State CRIT -Connection $Connection
+            List all services having a critical state.
+            Output default columns: host_name and description
+    .EXAMPLE
+        Get-CMKService -HostGroup MariaDB, OracleDB -State CRIT -Connection $Connection
+            List all services from host_groups "MariaDB" OR "OracleDB" having a critical state. 
     .LINK
         https://<CheckMK-Host>/<sitename>/check_mk/openapi/#operation/cmk.gui.plugins.openapi.endpoints.service._list_all_services
 #>
@@ -684,9 +687,12 @@ function Get-CMKService {
         [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter auf Service state (OK, WARN, CRIT, UNKNOWN)')]
         [ValidateSet('', 'OK', 'WARN', 'CRIT', 'UNKNOWN')]
         [string[]]$State,
+        [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'Filter host_groups, multiple values accepted (link using logical OR), case-insensitive equality')]
+        [Parameter(ParameterSetName = 'All', HelpMessage = 'Filter host_groups, multiple values accepted (link using logical OR), case-insensitive equality')]
+        [string[]]$HostGroup,
         [Parameter(ParameterSetName = 'byHostName', HelpMessage = 'auszugebende Felder')]
         [Parameter(ParameterSetName = 'All', HelpMessage = 'auszugebende Felder')]
-        [ValidateSet('host_name', 'description', 'state', 'plugin_output')]
+        [ValidateSet('host_name', 'description', 'state', 'plugin_output', 'host_groups')]
         $Columns = @('host_name', 'description'),
         [Parameter(Mandatory, ParameterSetName = 'byHostName')]
         [Parameter(Mandatory, ParameterSetName = 'All')]
@@ -701,7 +707,6 @@ function Get-CMKService {
         $QueryExprArray += "{""op"": ""~"", ""left"": ""description"", ""right"": ""$DescriptionRegExp""}"
     }
 
-    #ToDo: expression für State bauen, dann mit Expression für Description kombinieren 
     If ($State) {
         $StateExprArray = @()
         #map service state names to numeric state and add to list 
@@ -719,12 +724,29 @@ function Get-CMKService {
         #build query expression
         $StateExprList = $StateExprArray -join "," 
         If ($StateExprArray.Count -gt 1) {
-            $StateExpr += "{""op"": ""and"", ""expr"": [$StateExprList]}"
+            $StateExpr += "{""op"": ""or"", ""expr"": [$StateExprList]}"
         }
         else {
             $StateExpr += "$StateExprList"
         }
         $QueryExprArray += $StateExpr
+    }
+
+    If ($HostGroup) {
+        $HostGroupExprArray = @()
+        #map service state names to numeric state and add to list 
+        foreach ($i in $HostGroup) {
+            $HostGroupExprArray += "{""op"": ""<="", ""left"": ""host_groups"", ""right"": ""$i""}"
+        }
+        #build query expression
+        $HostGroupExprList = $HostGroupExprArray -join "," 
+        If ($HostGroupExprArray.Count -gt 1) {
+            $HostGroupExpr += "{""op"": ""or"", ""expr"": [$HostGroupExprList]}"
+        }
+        else {
+            $HostGroupExpr += "$HostGroupExprList"
+        }
+        $QueryExprArray += $HostGroupExpr
     }
 
     If ($QueryExprArray.Count -gt 0 -or $Columns) {
@@ -738,15 +760,14 @@ function Get-CMKService {
         $QueryExtension += "query={""op"": ""and"", ""expr"": [$QueryExprList]}"
     }
     else {
-		#do we have a query?
-		If ($QueryExprArray.Count -gt 0) {
+        #do we have a query?
+        If ($QueryExprArray.Count -gt 0) {
         $QueryExtension += "query=$QueryExprList"
-		}
+        }
     }
 
     If ($Columns) {
         foreach ($col in $Columns) {
-		 
             $QueryExtension += "&columns=$col"
         }
     }
