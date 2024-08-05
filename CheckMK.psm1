@@ -305,6 +305,66 @@ function New-CMKHost {
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/all' -Body $newHost -Connection $Connection
 
 }
+function New-CMKClusterHost {
+<#
+    .SYNOPSIS
+        Add cluster to checkmk
+    .DESCRIPTION
+        Add cluster to checkmk
+    .PARAMETER FolderPath
+        The path name of the folder in WATO. case sensitive. corresponds to "id" attribute in Get-CheckMKFolder.
+        example: "~servers/linux"
+    .PARAMETER Nodes
+        an array of nodes 
+    .PARAMETER Attributes
+        define attributes like alias, tags, custom variables.
+        example:
+        @{
+            alias = "PLUTO"
+            tag_criticality = "test"
+        }
+    .EXAMPLE
+        $ClusterAttributes = @{
+            alias = "MYCLUSTER"
+            tag_criticality = "test"
+        }
+        New-CMKClusterHost -Connection $CMKConn -Hostname mycluster.example -FolderPath "~clusters" -Nodes 'node1','node2' -Attributes $ClusterAttributes
+#>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]
+        $HostName,
+        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Anstelle von Slash bitte Tilde ~ benutzen. Case-Sensitive. Entspricht dem Attribut id im Objekt von Get-CheckMKFolder.')]
+        [string]
+        $FolderPath,
+        [Parameter(Mandatory=$true)]
+        [string[]]
+        $Nodes,
+        [parameter(Mandatory)]
+        [object]
+        $Connection,
+        [Parameter(HelpMessage = 'Hashtable @{attribute = "value"; attr2 = "value"} siehe https://<CheckMK-Host>/<sitename>/check_mk/api/1.0/ui/#/Hosts/cmk.gui.plugins.openapi.endpoints.host_config.create_host')]
+        $Attributes = @{}
+    )
+    $newCluster = @{
+        folder    = "$FolderPath"
+        host_name = "$($HostName)"
+        nodes = $Nodes
+        attributes = $Attributes
+    } | ConvertTo-Json
+    try {
+        return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/clusters' -Body $newCluster -Connection $Connection
+    }
+    catch {
+        if ($($_.Exception.Message) -match ".*Host .* already exists.") {
+            Write-Warning "Cluster Host already exists. `r`nFull error message:`r`n$($_.Exception.Message)"
+        }
+        else {
+            Write-Error "Cluster host could not be created in checkmk. `r`nError message:`r`n$($_.Exception.Message)"
+        }
+    }
+}
 function Rename-CMKHost {
     [CmdletBinding()]
     param(
@@ -789,6 +849,7 @@ $ExportableFunctions = @(
     'Invoke-CMKChangeActivation'
     'Get-CMKHost'
     'New-CMKHost'
+    'New-CMKClusterHost'
     'Rename-CMKHost'
     'Update-CMKHost'
     'Remove-CMKHost'
