@@ -245,8 +245,20 @@ function Invoke-CMKChangeActivation {
         redirect              = $false
         sites                 = [array]$Connection.sitename
     } | ConvertTo-Json
-    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $PendingChanges.Etag
-    $CheckMKActivationObject = Invoke-CMKApiCall -Method Post -Uri '/domain-types/activation_run/actions/activate-changes/invoke' -Body $activateChanges -Connection $oneTimeConnection
+    $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
+    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $PendingChanges.Etag
+    try {
+        $CheckMKActivationObject = Invoke-CMKApiCall -Method Post -Uri '/domain-types/activation_run/actions/activate-changes/invoke' -Body $activateChanges -Connection $oneTimeConnection
+    }
+    catch {
+        if ($($_.Exception.Message) -match "Currently there are no changes to activate.") {
+            Write-Warning "Currently there are no changes to activate."
+            return $true
+        }
+        else {
+            Write-Error "Changes could not be activated. Error message: $($_.Exception.Message)"
+        }
+    }
     if (-not $CheckMKActivationObject) {
         return $false
     }
