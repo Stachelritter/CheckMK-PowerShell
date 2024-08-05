@@ -353,7 +353,17 @@ function New-CMKClusterHost {
         nodes = $Nodes
         attributes = $Attributes
     } | ConvertTo-Json
-    return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/clusters' -Body $newCluster -Connection $Connection
+    try {
+        return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/clusters' -Body $newCluster -Connection $Connection
+    }
+    catch {
+        if ($($_.Exception.Message) -match ".*Host .* already exists.") {
+            Write-Warning "Cluster Host already exists. `r`nFull error message:`r`n$($_.Exception.Message)"
+        }
+        else {
+            Write-Error "Cluster host could not be created in checkmk. `r`nError message:`r`n$($_.Exception.Message)"
+        }
+    }
 }
 function Rename-CMKHost {
     [CmdletBinding()]
