@@ -864,10 +864,6 @@ function Invoke-CMKServiceDiscovery {
         [ValidateSet('new','remove','fix_all','tabula_rasa','refresh','only_host_labels')]
         [string]
         $Mode = 'fix_all',
-    
-        [Parameter(Mandatory = $false, HelpMessage = 'Warten auf Beendigung der Service Discovery')]
-        [switch]
-        $WaitforCompletion,
 
         [Parameter(Mandatory = $true)]
         [object]
