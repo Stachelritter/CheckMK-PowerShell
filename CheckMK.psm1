@@ -593,62 +593,51 @@ function Get-CMKDowntime {
 function New-CMKDowntime {
     [CmdletBinding()]
     param(
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onHost',
-            HelpMessage = 'Die Downtime wird für den genannten Host gesetzt'
-        )]
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onService',
-            HelpMessage = 'Die Downtime wird für die genannten Services dieses Hosts gesetzt'
-        )]
+        [parameter(Mandatory, ParameterSetName = 'onHost', HelpMessage = 'Die Downtime wird für den genannten Host gesetzt')]
+        [parameter(Mandatory, ParameterSetName = 'onService', HelpMessage = 'Die Downtime wird für die genannten Services dieses Hosts gesetzt')]
         [ValidateNotNullOrEmpty()]
         [string]
         $HostName,
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onService',
-            HelpMessage = 'Die Downtime wird nur für angegebene Services gesetzt (Case Sensitive)'
-        )]
+
+        [parameter(Mandatory, ParameterSetName = 'onService', HelpMessage = 'Die Downtime wird nur für angegebene Services gesetzt (Case Sensitive)' )]
         [ValidateNotNullOrEmpty()]
         [string[]]
         $ServiceDescriptions,
-        [parameter(
-            ParameterSetName = 'onHost'
-        )]
-        [parameter(
-            ParameterSetName = 'onService'
-        )]
+
+        [parameter(Mandatory = $false, ParameterSetName = 'onHost', HelpMessage = 'Startzeitpunkt ist optional. Wenn nicht befüllt wird die aktuelle Zeit als Start definiert.')]
+        [parameter(Mandatory = $false, ParameterSetName = 'onService', HelpMessage = 'Startzeitpunkt ist optional. Wenn nicht befüllt wird die aktuelle Zeit als Start definiert.')]
         [datetime]
         $StartTime = (Get-Date),
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onHost'
-        )]
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onService'
-        )]
+
+        # EndTime muss zwingend nach StartDate liegen. Ist das nicht der Fall wird kein Fehler gemeldet, CMK legt ohne Fehlermeldung keine Downtime an.
+        [parameter(Mandatory = $true, ParameterSetName = 'onHost', HelpMessage = 'Endzeitpunkt ist nicht optional.')]
+        [parameter(Mandatory = $true, ParameterSetName = 'onService', HelpMessage = 'Endzeitpunkt ist nicht optional.')]
+        [ValidateScript({
+            if ($_ -gt (Get-Date) -and $_ -gt $StartTime) {
+                $true
+            }else {
+                throw "$_ ist kein valider Wert. Endzeitpunkt muss nach dem Startdatum und in der Zukunft liegen."
+                # Geht nur mit PS6+
+                # ErrorMessage = "{0} ist kein valider Wert. Endzeitpunkt muss nach dem Startdatum und in der Zukunft liegen."
+            }
+        })]
         [datetime]
         $EndTime,
-        [parameter(
-            ParameterSetName = 'onHost'
-        )]
-        [parameter(
-            ParameterSetName = 'onService'
-        )]
+
+        [parameter(ParameterSetName = 'onHost')]
+        [parameter(ParameterSetName = 'onService')]
         [ValidateNotNullOrEmpty()]
         [string]
         $Comment,
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onHost'
-        )]
-        [parameter(
-            Mandatory,
-            ParameterSetName = 'onService'
-        )]
+
+        [Parameter(Mandatory = $false, ParameterSetName = 'onHost', HelpMessage = 'Dauer in Minuten. Downtime beginnt erst mit Statuswechsel und gilt für die angegebene Duration. Default ist 0.')]
+        [Parameter(Mandatory = $false, ParameterSetName = 'onService', HelpMessage = 'Dauer in Minuten. Downtime beginnt erst mit Statuswechsel und gilt für die angegebene Duration. Default ist 0.')]
+        [ValidateRange(0,[int]::MaxValue)]
+        [int]
+        $Duration,
+
+        [parameter(Mandatory, ParameterSetName = 'onHost')]
+        [parameter(Mandatory, ParameterSetName = 'onService')]
         [object]
         $Connection
     )
@@ -660,17 +649,25 @@ function New-CMKDowntime {
     If ($Comment) {
         $Downtime.comment = $Comment
     }
+    if ($Duration) {
+        $Downtime.duration = $Duration
+    }
     If ($PSCmdlet.ParameterSetName -eq 'onHost') {
         $Downtime.downtime_type = 'host'
         $Downtime = $Downtime | ConvertTo-Json
-        return Invoke-CMKApiCall -Method Post -Uri '/domain-types/downtime/collections/host' -Body $Downtime -Connection $Connection
+        $URI = '/domain-types/downtime/collections/host'
     }
     elseif ($PSCmdlet.ParameterSetName -eq 'onService') {
         $Downtime.downtime_type = 'service'
         $Downtime.service_descriptions = [array]$ServiceDescriptions
         $Downtime = $Downtime | ConvertTo-Json
-        return Invoke-CMKApiCall -Method Post -Uri '/domain-types/downtime/collections/service' -Body $Downtime -Connection $Connection
+        $URI = '/domain-types/downtime/collections/service'
     }
+
+    Write-Verbose -Message $Downtime
+    Write-Verbose -Message $URI
+
+    return Invoke-CMKApiCall -Method Post -Uri $URI -Body $Downtime -Connection $Connection
 }
 function Remove-CMKDowntime {
     [CmdletBinding()]
