@@ -294,7 +294,6 @@ function Get-CMKHost {
     }
     elseif ($PSCmdlet.ParameterSetName -eq 'Liste') {
         return Invoke-CMKApiCall -Method Get -Uri '/domain-types/host_config/collections/all' -Connection $Connection -EndpointReturnsList
-
     }
 }
 function New-CMKHost {
@@ -874,6 +873,80 @@ function Invoke-CMKServiceDiscovery {
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/service_discovery_run/actions/start/invoke' -Body $Body -Connection $Connection
 }
 #endregion Services
+#region Users
+function Get-CMKUser {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName = 'Spezifisch')]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Username,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Spezifisch')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'Liste')]
+        [object]
+        $Connection
+    )
+    
+    if ($PSCmdlet.ParameterSetName -eq 'Spezifisch') {
+        return Invoke-CMKApiCall -Method Get -Uri "/objects/user_config/$($Username)" -Connection $Connection
+    }elseif ($PSCmdlet.ParameterSetName -eq 'Liste') {
+        return Invoke-CMKApiCall -Method Get -Uri "/domain-types/user_config/collections/all" -Connection $Connection -EndpointReturnsList
+    }
+}
+
+function Update-CMKUser {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, HelpMessage = 'Mit Get-CMK-User abgerufenes User Objekt')]
+        [object]
+        $UserObject,
+
+        [Parameter(Mandatory = $true)]
+        $Changeset,
+
+        [Parameter(Mandatory = $true)]
+        [object]
+        $Connection
+    )
+    
+    Write-Verbose -Message $UserObject
+    Write-Verbose -Message $Changeset
+
+    $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
+
+    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $UserObject.Etag
+    return Invoke-CMKApiCall -Method Put -Uri "/objects/user_config/$($UserObject.Id)" -Body $Changeset -Connection $oneTimeConnection
+}
+
+function Set-CMKUserAttribute {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, HelpMessage = 'Mit Get-CMK-User abgerufenes User Objekt')]
+        [object]
+        $UserObject,
+
+        [Parameter(Mandatory = $true)]
+        [string]
+        $UpdateAttribute,
+
+        [Parameter(Mandatory = $true)]
+        $Value,
+
+        [Parameter(Mandatory = $true)]
+        [object]
+        $Connection
+    )
+    
+    $Changeset = @{
+        $UpdateAttribute = $Value
+    }
+
+    $Changeset = $Changeset | ConvertTo-Json
+
+    return Update-CMKUser -UserObject $UserObject -Changeset $Changeset -Connection $Connection -Verbose
+}
+#endregion
 $ExportableFunctions = @(
     'Get-CMKConnection'
     'Invoke-CMKApiCall'
@@ -895,5 +968,8 @@ $ExportableFunctions = @(
     'Get-CMKPendingChanges'
     'Get-CMKService'
     'Invoke-CMKServiceDiscovery'
+    'Get-CMKUser'
+    'Update-CMKUser'
+    'Set-CMKUserAttribute'
 )
 Export-ModuleMember -Function $ExportableFunctions
