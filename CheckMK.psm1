@@ -853,6 +853,30 @@ function Get-CMKService {
         return Invoke-CMKApiCall -Method Get -Uri "/domain-types/service/collections/all$($QueryExtension)" -Connection $Connection -EndpointReturnsList
     }
 }
+function Invoke-CMKServiceDiscovery {
+    [CmdletBinding()]
+    param (
+        [parameter(Mandatory = $true, HelpMessage = 'Mit Get-CMKHost abgerufen')]
+        [string]
+        $HostName,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('new','remove','fix_all','tabula_rasa','refresh','only_host_labels')]
+        [string]
+        $Mode = 'fix_all',
+
+        [Parameter(Mandatory = $true)]
+        [object]
+        $Connection
+    )
+
+    $Body = @{
+        host_name = $HostName
+        mode = $Mode
+    } | ConvertTo-Json
+
+    return Invoke-CMKApiCall -Method Post -Uri '/domain-types/service_discovery_run/actions/start/invoke' -Body $Body -Connection $Connection
+}
 #endregion Services
 $ExportableFunctions = @(
     'Get-CMKConnection'
@@ -874,5 +898,6 @@ $ExportableFunctions = @(
     'Remove-CMKDowntime'
     'Get-CMKPendingChanges'
     'Get-CMKService'
+    'Invoke-CMKServiceDiscovery'
 )
 Export-ModuleMember -Function $ExportableFunctions
