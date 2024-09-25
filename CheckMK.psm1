@@ -665,7 +665,6 @@ function New-CMKDowntime {
     }
 
     Write-Verbose -Message $Downtime
-    Write-Verbose -Message $URI
 
     return Invoke-CMKApiCall -Method Post -Uri $URI -Body $Downtime -Connection $Connection
 }
