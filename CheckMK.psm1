@@ -55,7 +55,7 @@ function Get-CMKConnection {
         [parameter(HelpMessage = 'Benutzer mit genügend Rechten in CheckMK. Per Standard wird der Skriptausführende Benutzer gewählt.')]
         [string]
         $Username,
-		[parameter(HelpMessage = 'Passwort zum Zugriff auf die CheckMK API.')]
+		[parameter(Mandatory, HelpMessage = 'Passwort zum Zugriff auf die CheckMK API.')]
 		[SecureString]
 		$Secret,
         [parameter(HelpMessage = 'Wenn bestehende Objekte bearbeitet werden sollen, muss das ETag des Objektes zuvor abgerufen und bei der Änderungsanfrage in den Header eingefügt werden.')]
@@ -90,7 +90,7 @@ function Get-CMKHeader {
         [ValidateNotNullOrEmpty()]
         [string]
         $Username,
-        [parameter(HelpMessage = 'Passwort zum Zugriff auf die CheckMK API.')]
+        [parameter(Mandatory, HelpMessage = 'Passwort zum Zugriff auf die CheckMK API.')]
         [ValidateNotNullOrEmpty()]
 		[SecureString]
 		$Secret,
