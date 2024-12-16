@@ -392,7 +392,8 @@ function Rename-CMKHost {
     )
     # Ist langsam. Behindert den Betrieb von CheckMK (Server steht während der Zeit). Dauer: ca 30 Sekunden
     # Im Anschluss: Invoke-CMKChangeActivation
-    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $HostObject.Etag
+    $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
+    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $HostObject.Etag -Secret $ConnSecret
     $newName = @{
         new_name = $newHostName
     } | ConvertTo-Json
@@ -411,7 +412,8 @@ function Update-CMKHost {
         $Connection
     )
     # https://<CheckMK-Host>/<sitename>/check_mk/api/1.0/ui/#/Hosts/cmk.gui.plugins.openapi.endpoints.host_config.update_host
-    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $HostObject.Etag
+    $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
+    $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $HostObject.Etag -Secret $ConnSecret
     return Invoke-CMKApiCall -Method Put -Uri "/objects/host_config/$($HostObject.id)" -Body $Changeset -Connection $oneTimeConnection
 }
 function Remove-CMKHost {
@@ -914,7 +916,6 @@ function Update-CMKUser {
     Write-Verbose -Message $Changeset
 
     $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
-
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $UserObject.Etag
     return Invoke-CMKApiCall -Method Put -Uri "/objects/user_config/$($UserObject.Id)" -Body $Changeset -Connection $oneTimeConnection
 }
