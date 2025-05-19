@@ -173,11 +173,21 @@ function Invoke-CMKApiCall {
         $EndpointReturnsList
     )
     # Wandelt das Ergebnis einer CustomWebRequest zu einem Objekt.
-    # Schlägt der Aufruf fehl, wird nur $false zurückgegeben.
-
-    If (-not (Test-NetConnection -ComputerName $Connection.Hostname -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded) {
-        Write-Verbose "$($Connection.Hostname) ist nicht erreichbar"
-        throw [System.Net.WebException]
+    $ConnectionCheckIntervalMinutes = 60
+    If ($Global:CMKLastSuccessfulConnect -and (($Global:CMKLastSuccessfulConnect | Get-Date) -gt (Get-Date).AddMinutes(-$ConnectionCheckIntervalMinutes))){
+        # Recently checked
+        Write-Verbose ":$($MyInvocation.MyCommand): Last connection check at $($Global:CMKLastSuccessfulConnect)."
+    }
+    else {
+        # New check required
+        Write-Verbose ":$($MyInvocation.MyCommand): Connection check..."
+        If (-not (Test-NetConnection -ComputerName $Connection.Hostname -Port 443 -WarningAction SilentlyContinue).TcpTestSucceeded) {
+            Write-Verbose "$($Connection.Hostname) ist nicht erreichbar"
+            throw [System.Net.WebException]
+        } 
+        else {
+            $Global:CMKLastSuccessfulConnect = Get-Date -Format 'o'
+        }
     }
 
     $PSBoundParameters.Headers = $Connection.Header
