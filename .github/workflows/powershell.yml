@@ -37,7 +37,6 @@ jobs:
           # Include your own basic security rules. Removing this option will run all the rules
           includeRule: '"PSAvoidGlobalAliases", "PSAvoidUsingConvertToSecureStringWithPlainText"'
           output: results.sarif
-          enableExit: true
 
       # Upload the SARIF file generated in the previous step
       - name: Upload SARIF results file
