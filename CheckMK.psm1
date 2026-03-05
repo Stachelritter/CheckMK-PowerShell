@@ -323,13 +323,53 @@ function Get-CMKHost {
         return Invoke-CMKApiCall -Method Get -Uri '/domain-types/host_config/collections/all' -Connection $Connection -EndpointReturnsList
     }
 }
+function Get-CMKHostInventory {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $HostName,
+        [Parameter(Mandatory)]
+        $Connection,
+        [Parameter()]
+        [ValidateSet('json', 'xml')]
+        [string]
+        $OutputFormat='json',
+        [Parameter()]
+        [switch]
+        $AsPlainText
+    )
+    $Method = 'Get'
+    $Uri = "https://$($Connection.Hostname)/$($Connection.Sitename)/check_mk/host_inv_api.py?host=$HostName&output_format=$OutputFormat"
+    Write-Verbose "$Method $Uri"
+    $Response = Invoke-CustomWebRequest -Method $Method -Uri $Uri -Headers $Connection.Header
+    if ([int]($Response.BaseResponse.StatusCode) -eq 200) {
+        If ($AsPlainText) {
+            return $Response.Response.Content
+        } else {
+            switch ($OutputFormat) {
+                'xml' {
+                    return [xml]($Response.Response.Content)
+                }
+                'json' {
+                    return ($Response.Response.Content | ConvertFrom-Json)
+                }
+            }
+        }
+    }
+    else {
+        # Not OK. 
+        throw "StatusCode: $([int]($Response.BaseResponse.StatusCode)) StatusDescription: $($Response.BaseResponse.StatusDescription)`r`nMessage: `r`n$($Response.BaseResponse.ErrorMessage)"
+    }
+}
 function New-CMKHost {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]
         $HostName,
-        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Case-Sensitive. Entspricht dem Attribut path im Objekt von Get-CheckMKFolder.')]
+        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Anstelle von Slash bitte Tilde ~ benutzen. Case-Sensitive. Entspricht dem Attribut id im Objekt von Get-CheckMKFolder.'')]
         [string]
         $FolderPath,
         [parameter(Mandatory)]
@@ -981,6 +1021,7 @@ $ExportableFunctions = @(
     'Get-CMKServerInfo'
     'Invoke-CMKChangeActivation'
     'Get-CMKHost'
+    'Get-CMKHostInventory'
     'New-CMKHost'
     'New-CMKClusterHost'
     'Rename-CMKHost'
