@@ -41,6 +41,23 @@ function Set-CertificateValidationPolicy {
         }
     }
 }
+function EscapeNonAscii([Parameter(Mandatory,ValueFromPipeline)][string] $s) {
+    # Ab Powershell 7 soll stattdessen an ConvertTo-Json der Parameter -EscapeHandling EscapeNonAscii verwendet werden.
+    Process {
+        $sb = New-Object System.Text.StringBuilder
+        for ([int] $i = 0; $i -lt $s.Length; $i++) {
+            $c = $s[$i]
+            if ($c -gt 127) {
+                $sb = $sb.Append("\u").Append(([int] $c).ToString("X").PadLeft(4, "0"))
+            }
+            else {
+                $sb = $sb.Append($c)
+            }
+        }
+        $sb.ToString()
+    }
+}
+
 function Get-CMKConnection {
     [CmdletBinding()]
     param (
@@ -194,19 +211,19 @@ function Invoke-CMKApiCall {
     $PSBoundParameters.Uri = "$($Connection.APIUrl)$($Uri)"
     $PSBoundParameters.Remove('Connection') | Out-Null
     $PSBoundParameters.Remove('EndpointReturnsList') | Out-Null
-
+    Write-Verbose "$Method $($PSBoundParameters.Uri)   ---  Body: $($PSBoundParameters.Body)"
     $Response = Invoke-CustomWebRequest @PSBoundParameters
     Write-Verbose "$([int]($Response.BaseResponse.StatusCode)) $($Response.BaseResponse.StatusDescription)"
     if ([int]($Response.BaseResponse.StatusCode) -eq 200) {
         # 200 Ok
-        $CheckKMObject = ($Response.Response.Content | ConvertFrom-Json)
-        $CheckKMObject | Add-Member -MemberType NoteProperty -Name ETag -Value $Response.Response.Headers.ETag
+        $CheckMKObject = ($Response.Response.Content | ConvertFrom-Json)
+        $CheckMKObject | Add-Member -MemberType NoteProperty -Name ETag -Value $Response.Response.Headers.ETag
 
         if ($EndpointReturnsList.IsPresent) {
-            return $CheckKMObject.Value
+            return $CheckMKObject.Value
         }
         else {
-            return $CheckKMObject
+            return $CheckMKObject
         }
     }
     elseif ((@('Post', 'Delete') -contains $Method) -and ([int]($Response.BaseResponse.StatusCode) -eq 204)) {
@@ -254,7 +271,7 @@ function Invoke-CMKChangeActivation {
         force_foreign_changes = $ForceForeignChanges.IsPresent
         redirect              = $false
         sites                 = [array]$Connection.sitename
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $PendingChanges.Etag
     try {
@@ -322,7 +339,7 @@ function New-CMKHost {
     $newHost = @{
         folder    = "$FolderPath"
         host_name = "$($HostName)"
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/all' -Body $newHost -Connection $Connection
 
 }
@@ -373,7 +390,7 @@ function New-CMKClusterHost {
         host_name = "$($HostName)"
         nodes = $Nodes
         attributes = $Attributes
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     try {
         return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/clusters' -Body $newCluster -Connection $Connection
     }
@@ -406,7 +423,7 @@ function Rename-CMKHost {
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $HostObject.Etag -Secret $ConnSecret
     $newName = @{
         new_name = $newHostName
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     return Invoke-CMKApiCall -Method Put -Uri "/objects/host_config/$($HostObject.id)/actions/rename/invoke" -Body $newName -Connection $oneTimeConnection
 }
 function Update-CMKHost {
@@ -472,7 +489,7 @@ function Set-CMKHostAttribute {
     elseif ($PSCmdlet.ParameterSetName -eq 'Remove') {
         $Changeset.remove_attributes = [array]("$RemoveAttribute")
     }
-    $Changeset = $Changeset | ConvertTo-Json
+    $Changeset = $Changeset | ConvertTo-Json | EscapeNonAscii
     return Update-CMKHost -HostObject $HostObject -Changeset $Changeset -Connection $Connection
 }
 function Add-CMKHostLabel {
@@ -665,13 +682,13 @@ function New-CMKDowntime {
     }
     If ($PSCmdlet.ParameterSetName -eq 'onHost') {
         $Downtime.downtime_type = 'host'
-        $Downtime = $Downtime | ConvertTo-Json
+        $Downtime = $Downtime | ConvertTo-Json | EscapeNonAscii
         $URI = '/domain-types/downtime/collections/host'
     }
     elseif ($PSCmdlet.ParameterSetName -eq 'onService') {
         $Downtime.downtime_type = 'service'
         $Downtime.service_descriptions = [array]$ServiceDescriptions
-        $Downtime = $Downtime | ConvertTo-Json
+        $Downtime = $Downtime | ConvertTo-Json | EscapeNonAscii
         $URI = '/domain-types/downtime/collections/service'
     }
 
@@ -715,7 +732,7 @@ function Remove-CMKDowntime {
         $Delete.service_descriptions = [array]$ServiceDescriptions
 
     }
-    $Delete = $Delete | ConvertTo-Json
+    $Delete = $Delete | ConvertTo-Json | EscapeNonAscii
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/downtime/actions/delete/invoke' -Body $Delete -Connection $Connection
 }
 #endregion Downtimes
@@ -880,7 +897,7 @@ function Invoke-CMKServiceDiscovery {
     $Body = @{
         host_name = $HostName
         mode = $Mode
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
 
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/service_discovery_run/actions/start/invoke' -Body $Body -Connection $Connection
 }
@@ -953,7 +970,7 @@ function Set-CMKUserAttribute {
         $UpdateAttribute = $Value
     }
 
-    $Changeset = $Changeset | ConvertTo-Json
+    $Changeset = $Changeset | ConvertTo-Json | EscapeNonAscii
 
     return Update-CMKUser -UserObject $UserObject -Changeset $Changeset -Connection $Connection -Verbose
 }
