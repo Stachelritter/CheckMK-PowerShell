@@ -41,6 +41,23 @@ function Set-CertificateValidationPolicy {
         }
     }
 }
+function EscapeNonAscii([Parameter(Mandatory,ValueFromPipeline)][string] $s) {
+    # Ab Powershell 7 soll stattdessen an ConvertTo-Json der Parameter -EscapeHandling EscapeNonAscii verwendet werden.
+    Process {
+        $sb = New-Object System.Text.StringBuilder
+        for ([int] $i = 0; $i -lt $s.Length; $i++) {
+            $c = $s[$i]
+            if ($c -gt 127) {
+                $sb = $sb.Append("\u").Append(([int] $c).ToString("X").PadLeft(4, "0"))
+            }
+            else {
+                $sb = $sb.Append($c)
+            }
+        }
+        $sb.ToString()
+    }
+}
+
 function Get-CMKConnection {
     [CmdletBinding()]
     param (
@@ -194,19 +211,19 @@ function Invoke-CMKApiCall {
     $PSBoundParameters.Uri = "$($Connection.APIUrl)$($Uri)"
     $PSBoundParameters.Remove('Connection') | Out-Null
     $PSBoundParameters.Remove('EndpointReturnsList') | Out-Null
-
+    Write-Verbose "$Method $($PSBoundParameters.Uri)   ---  Body: $($PSBoundParameters.Body)"
     $Response = Invoke-CustomWebRequest @PSBoundParameters
     Write-Verbose "$([int]($Response.BaseResponse.StatusCode)) $($Response.BaseResponse.StatusDescription)"
     if ([int]($Response.BaseResponse.StatusCode) -eq 200) {
         # 200 Ok
-        $CheckKMObject = ($Response.Response.Content | ConvertFrom-Json)
-        $CheckKMObject | Add-Member -MemberType NoteProperty -Name ETag -Value $Response.Response.Headers.ETag
+        $CheckMKObject = ($Response.Response.Content | ConvertFrom-Json)
+        $CheckMKObject | Add-Member -MemberType NoteProperty -Name ETag -Value $Response.Response.Headers.ETag
 
         if ($EndpointReturnsList.IsPresent) {
-            return $CheckKMObject.Value
+            return $CheckMKObject.Value
         }
         else {
-            return $CheckKMObject
+            return $CheckMKObject
         }
     }
     elseif ((@('Post', 'Delete') -contains $Method) -and ([int]($Response.BaseResponse.StatusCode) -eq 204)) {
@@ -254,7 +271,7 @@ function Invoke-CMKChangeActivation {
         force_foreign_changes = $ForceForeignChanges.IsPresent
         redirect              = $false
         sites                 = [array]$Connection.sitename
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $PendingChanges.Etag
     try {
@@ -306,13 +323,53 @@ function Get-CMKHost {
         return Invoke-CMKApiCall -Method Get -Uri '/domain-types/host_config/collections/all' -Connection $Connection -EndpointReturnsList
     }
 }
+function Get-CMKHostInventory {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $HostName,
+        [Parameter(Mandatory)]
+        $Connection,
+        [Parameter()]
+        [ValidateSet('json', 'xml')]
+        [string]
+        $OutputFormat='json',
+        [Parameter()]
+        [switch]
+        $AsPlainText
+    )
+    $Method = 'Get'
+    $Uri = "https://$($Connection.Hostname)/$($Connection.Sitename)/check_mk/host_inv_api.py?host=$HostName&output_format=$OutputFormat"
+    Write-Verbose "$Method $Uri"
+    $Response = Invoke-CustomWebRequest -Method $Method -Uri $Uri -Headers $Connection.Header
+    if ([int]($Response.BaseResponse.StatusCode) -eq 200) {
+        If ($AsPlainText) {
+            return $Response.Response.Content
+        } else {
+            switch ($OutputFormat) {
+                'xml' {
+                    return [xml]($Response.Response.Content)
+                }
+                'json' {
+                    return ($Response.Response.Content | ConvertFrom-Json)
+                }
+            }
+        }
+    }
+    else {
+        # Not OK. 
+        throw "StatusCode: $([int]($Response.BaseResponse.StatusCode)) StatusDescription: $($Response.BaseResponse.StatusDescription)`r`nMessage: `r`n$($Response.BaseResponse.ErrorMessage)"
+    }
+}
 function New-CMKHost {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]
         $HostName,
-        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Case-Sensitive. Entspricht dem Attribut path im Objekt von Get-CheckMKFolder.')]
+        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Anstelle von Slash bitte Tilde ~ benutzen. Case-Sensitive. Entspricht dem Attribut id im Objekt von Get-CheckMKFolder.'')]
         [string]
         $FolderPath,
         [parameter(Mandatory)]
@@ -322,7 +379,7 @@ function New-CMKHost {
     $newHost = @{
         folder    = "$FolderPath"
         host_name = "$($HostName)"
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/all' -Body $newHost -Connection $Connection
 
 }
@@ -373,7 +430,7 @@ function New-CMKClusterHost {
         host_name = "$($HostName)"
         nodes = $Nodes
         attributes = $Attributes
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     try {
         return Invoke-CMKApiCall -Method Post -Uri '/domain-types/host_config/collections/clusters' -Body $newCluster -Connection $Connection
     }
@@ -406,7 +463,7 @@ function Rename-CMKHost {
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -IfMatch $HostObject.Etag -Secret $ConnSecret
     $newName = @{
         new_name = $newHostName
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
     return Invoke-CMKApiCall -Method Put -Uri "/objects/host_config/$($HostObject.id)/actions/rename/invoke" -Body $newName -Connection $oneTimeConnection
 }
 function Update-CMKHost {
@@ -472,7 +529,7 @@ function Set-CMKHostAttribute {
     elseif ($PSCmdlet.ParameterSetName -eq 'Remove') {
         $Changeset.remove_attributes = [array]("$RemoveAttribute")
     }
-    $Changeset = $Changeset | ConvertTo-Json
+    $Changeset = $Changeset | ConvertTo-Json | EscapeNonAscii
     return Update-CMKHost -HostObject $HostObject -Changeset $Changeset -Connection $Connection
 }
 function Add-CMKHostLabel {
@@ -665,13 +722,13 @@ function New-CMKDowntime {
     }
     If ($PSCmdlet.ParameterSetName -eq 'onHost') {
         $Downtime.downtime_type = 'host'
-        $Downtime = $Downtime | ConvertTo-Json
+        $Downtime = $Downtime | ConvertTo-Json | EscapeNonAscii
         $URI = '/domain-types/downtime/collections/host'
     }
     elseif ($PSCmdlet.ParameterSetName -eq 'onService') {
         $Downtime.downtime_type = 'service'
         $Downtime.service_descriptions = [array]$ServiceDescriptions
-        $Downtime = $Downtime | ConvertTo-Json
+        $Downtime = $Downtime | ConvertTo-Json | EscapeNonAscii
         $URI = '/domain-types/downtime/collections/service'
     }
 
@@ -715,7 +772,7 @@ function Remove-CMKDowntime {
         $Delete.service_descriptions = [array]$ServiceDescriptions
 
     }
-    $Delete = $Delete | ConvertTo-Json
+    $Delete = $Delete | ConvertTo-Json | EscapeNonAscii
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/downtime/actions/delete/invoke' -Body $Delete -Connection $Connection
 }
 #endregion Downtimes
@@ -860,6 +917,87 @@ function Get-CMKService {
         return Invoke-CMKApiCall -Method Get -Uri "/domain-types/service/collections/all$($QueryExtension)" -Connection $Connection -EndpointReturnsList
     }
 }
+function Get-CMKServiceMetric {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [string]
+        $HostName,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [object]
+        $Connection,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [datetime]
+        $StartTime,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [datetime]
+        $EndTime,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [string]
+        $ServiceDescription,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [ValidateSet('predefined_graph','single_metric')]
+        [string]
+        $Type,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph", HelpMessage = 'Internal GraphID e.g. "if_errors" for interface error graph.')]
+        [string]
+        $GraphID,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric", HelpMessage = 'Internal MetricID e.g. "if_in_errors" for the single metric of input errors on an interface')]
+        [string]
+        $MetricID,
+
+        [Parameter(Mandatory = $false, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $false, ParameterSetName="Single_Metric")]
+        [ValidateSet('min','max','average')]
+        [string]
+        $Reduce,
+
+        [Parameter(Mandatory = $false, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $false, ParameterSetName="Single_Metric")]
+        [string]
+        $Site
+    )
+
+    $Body = @{
+        time_range = @{
+            start = $($StartTime.ToString("yyyy-MM-dd HH:mm:ss"))
+            end = $($EndTime.ToString("yyyy-MM-dd HH:mm:ss"))
+        }
+        host_name = $HostName
+        service_description = $ServiceDescription
+        type = $Type
+    }
+
+    if ($PSBoundParameters.ContainsKey('Reduce')) {
+        $Body.Add('reduce',"$Reduce")
+    }
+    if ($PSBoundParameters.ContainsKey('Site')) {
+        $Body.Add('site',"$Site")
+    }
+
+    If ($PSCmdlet.ParameterSetName -eq 'Predefined_Graph') {
+        $Body.Add('graph_id',"$GraphID")
+    }
+    elseif ($PSCmdlet.ParameterSetName -eq 'Single_Metric') {
+        $Body.Add('metric_id',"$MetricID")
+    }
+
+    $Body = $Body | ConvertTo-Json | EscapeNonAscii
+    return Invoke-CMKApiCall -Method Post -Uri '/domain-types/metric/actions/get/invoke' -Body $Body -Connection $Connection
+}
 function Invoke-CMKServiceDiscovery {
     [CmdletBinding()]
     param (
@@ -880,7 +1018,7 @@ function Invoke-CMKServiceDiscovery {
     $Body = @{
         host_name = $HostName
         mode = $Mode
-    } | ConvertTo-Json
+    } | ConvertTo-Json | EscapeNonAscii
 
     return Invoke-CMKApiCall -Method Post -Uri '/domain-types/service_discovery_run/actions/start/invoke' -Body $Body -Connection $Connection
 }
@@ -926,6 +1064,7 @@ function Update-CMKUser {
     Write-Verbose -Message $Changeset
 
     $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
+
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $UserObject.Etag
     return Invoke-CMKApiCall -Method Put -Uri "/objects/user_config/$($UserObject.Id)" -Body $Changeset -Connection $oneTimeConnection
 }
@@ -953,7 +1092,7 @@ function Set-CMKUserAttribute {
         $UpdateAttribute = $Value
     }
 
-    $Changeset = $Changeset | ConvertTo-Json
+    $Changeset = $Changeset | ConvertTo-Json | EscapeNonAscii
 
     return Update-CMKUser -UserObject $UserObject -Changeset $Changeset -Connection $Connection -Verbose
 }
@@ -964,6 +1103,7 @@ $ExportableFunctions = @(
     'Get-CMKServerInfo'
     'Invoke-CMKChangeActivation'
     'Get-CMKHost'
+    'Get-CMKHostInventory'
     'New-CMKHost'
     'New-CMKClusterHost'
     'Rename-CMKHost'
@@ -978,6 +1118,7 @@ $ExportableFunctions = @(
     'Remove-CMKDowntime'
     'Get-CMKPendingChanges'
     'Get-CMKService'
+    'Get-CMKServiceMetric'
     'Invoke-CMKServiceDiscovery'
     'Get-CMKUser'
     'Update-CMKUser'
