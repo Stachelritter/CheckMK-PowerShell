@@ -917,6 +917,87 @@ function Get-CMKService {
         return Invoke-CMKApiCall -Method Get -Uri "/domain-types/service/collections/all$($QueryExtension)" -Connection $Connection -EndpointReturnsList
     }
 }
+function Get-CMKServiceMetric {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [string]
+        $HostName,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [object]
+        $Connection,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [datetime]
+        $StartTime,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [datetime]
+        $EndTime,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [string]
+        $ServiceDescription,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric")]
+        [ValidateSet('predefined_graph','single_metric')]
+        [string]
+        $Type,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Predefined_Graph", HelpMessage = 'Internal GraphID e.g. "if_errors" for interface error graph.')]
+        [string]
+        $GraphID,
+
+        [Parameter(Mandatory = $true, ParameterSetName="Single_Metric", HelpMessage = 'Internal MetricID e.g. "if_in_errors" for the single metric of input errors on an interface')]
+        [string]
+        $MetricID,
+
+        [Parameter(Mandatory = $false, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $false, ParameterSetName="Single_Metric")]
+        [ValidateSet('min','max','average')]
+        [string]
+        $Reduce,
+
+        [Parameter(Mandatory = $false, ParameterSetName="Predefined_Graph")]
+        [Parameter(Mandatory = $false, ParameterSetName="Single_Metric")]
+        [string]
+        $Site
+    )
+
+    $Body = @{
+        time_range = @{
+            start = $($StartTime.ToString("yyyy-MM-dd HH:mm:ss"))
+            end = $($EndTime.ToString("yyyy-MM-dd HH:mm:ss"))
+        }
+        host_name = $HostName
+        service_description = $ServiceDescription
+        type = $Type
+    }
+
+    if ($PSBoundParameters.ContainsKey('Reduce')) {
+        $Body.Add('reduce',"$Reduce")
+    }
+    if ($PSBoundParameters.ContainsKey('Site')) {
+        $Body.Add('site',"$Site")
+    }
+
+    If ($PSCmdlet.ParameterSetName -eq 'Predefined_Graph') {
+        $Body.Add('graph_id',"$GraphID")
+    }
+    elseif ($PSCmdlet.ParameterSetName -eq 'Single_Metric') {
+        $Body.Add('metric_id',"$MetricID")
+    }
+
+    $Body = $Body | ConvertTo-Json | EscapeNonAscii
+    return Invoke-CMKApiCall -Method Post -Uri '/domain-types/metric/actions/get/invoke' -Body $Body -Connection $Connection
+}
 function Invoke-CMKServiceDiscovery {
     [CmdletBinding()]
     param (
@@ -983,6 +1064,7 @@ function Update-CMKUser {
     Write-Verbose -Message $Changeset
 
     $ConnSecret = $Connection.Header.Authorization.Split(' ')[2] | ConvertTo-SecureString -AsPlainText -Force
+
     $oneTimeConnection = Get-CMKConnection -Hostname $Connection.hostname -Sitename $Connection.sitename -Username $Connection.username -Secret $ConnSecret -IfMatch $UserObject.Etag
     return Invoke-CMKApiCall -Method Put -Uri "/objects/user_config/$($UserObject.Id)" -Body $Changeset -Connection $oneTimeConnection
 }
@@ -1036,6 +1118,7 @@ $ExportableFunctions = @(
     'Remove-CMKDowntime'
     'Get-CMKPendingChanges'
     'Get-CMKService'
+    'Get-CMKServiceMetric'
     'Invoke-CMKServiceDiscovery'
     'Get-CMKUser'
     'Update-CMKUser'
