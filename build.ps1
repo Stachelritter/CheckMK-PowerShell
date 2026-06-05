@@ -83,7 +83,7 @@ if ($functions.Count -gt 0) {
     $null = $lines.Add(('Export-ModuleMember -Function @(''{0}'')' -f ($functions -join ''', ''')))
 }
 try {
-    $lines | Set-Content -Path $moduleBodyName -Encoding UTF8 -Force -EA Stop
+    $lines | Set-Content -Path $moduleBodyName -Encoding UTF8BOM -Force -EA Stop
 } catch {
     exit 3
 }
