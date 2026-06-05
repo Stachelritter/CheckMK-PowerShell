@@ -369,7 +369,7 @@ function New-CMKHost {
         [Parameter(Mandatory)]
         [string]
         $HostName,
-        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Anstelle von Slash bitte Tilde ~ benutzen. Case-Sensitive. Entspricht dem Attribut id im Objekt von Get-CheckMKFolder.'')]
+        [Parameter(Mandatory, HelpMessage = 'Pfad zum Ordner. Anstelle von Slash bitte Tilde ~ benutzen. Case-Sensitive. Entspricht dem Attribut id im Objekt von Get-CheckMKFolder.')]
         [string]
         $FolderPath,
         [parameter(Mandatory)]
