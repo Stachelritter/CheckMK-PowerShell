@@ -62,6 +62,9 @@ jobs:
           }
           Install-Module PackageManagement -Force -AllowClobber -Scope CurrentUser
           Install-Module PowerShellGet -Force -AllowClobber -Scope CurrentUser
+          New-Item -ItemType Directory -Path 'C:\ProgramData\Microsoft\Windows\PowerShell\PowerShellGet' -Force
+          $env:PATH += ';C:\ProgramData\Microsoft\Windows\PowerShell\PowerShellGet'
+          Invoke-WebRequest -Uri 'https://aka.ms/psget-nugetexe' -OutFile 'C:\ProgramData\Microsoft\Windows\PowerShell\PowerShellGet\NuGet.exe'
         
       - name: Publish script to PowerShell Gallery
         shell: pwsh
@@ -69,10 +72,10 @@ jobs:
           PSGALLERY_SECRET: ${{ secrets.PSGALLERY_SECRET}}
         run: |
           $ErrorActionPreference = 'Stop'
+          $env:NUGET_CLI_LANGUAGE="en_US"
           [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
           $parameters = @{
-            Name = "CheckMK"
             NuGetApiKey = $env:PSGALLERY_SECRET
-            Path "./CheckMK/"
+            Path = "./CheckMK/"
           }
-          Publish-Module $parameters
+          Publish-Module @parameters

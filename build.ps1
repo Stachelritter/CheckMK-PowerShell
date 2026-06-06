@@ -100,13 +100,14 @@ $manifestData = @{
     CompatiblePSEditions = $moduleInfo.CompatiblePSEditions
     Path = $moduleManifestName
     RootModule = ('{0}.psm1' -f $moduleInfo.ModuleName)
-    NestedModules = @()
+    #NestedModules = @()
     RequiredModules = $moduleInfo.RequiredModules
     FunctionsToExport = $functions
     CmdletsToExport = @()
     VariablesToExport = @()
     PrivateData = @{}
     Tags = $moduleInfo.Tags
+    LicenseUri = $moduleInfo.LicenseUri
 }
 
 Write-Host 'Building module manifest'
