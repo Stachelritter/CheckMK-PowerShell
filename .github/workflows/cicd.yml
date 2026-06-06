@@ -1,0 +1,66 @@
+name: Build and Publish
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'moduleinfo.json'
+      - 'build.ps1'
+      - '.github/workflows/**'
+
+jobs: 
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build
+        shell: pwsh
+        run: |
+          & .\build.ps1
+      
+      - name: upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Module
+          path: ./CheckMK/
+          if-no-files-found: error
+
+  publish: 
+    name: Publish to PowerShellGallery
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'release'
+    runs-on: windows-latest
+    needs: build
+    steps: 
+      - name: Restore Built PowerShell-Module
+        uses: actions/download-artifact@v8
+        with:
+          name: Module
+          path: ./Module/
+
+      - name: Ensure NuGet and PowerShellGet are available
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+          if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+          }
+          Install-Module PackageManagement -Force -AllowClobber -Scope CurrentUser
+          Install-Module PowerShellGet -Force -AllowClobber -Scope CurrentUser
+        
+      - name: Publish script to PowerShell Gallery
+        shell: pwsh
+        env: 
+          PSGALLERY_SECRET: ${{ secrets.PSGALLERY_SECRET}}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          Publish-Script -Path './Module/' -NuGetApiKey $env:PSGALLERY_SECRET -Verbose

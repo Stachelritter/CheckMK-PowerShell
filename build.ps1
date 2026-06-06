@@ -11,7 +11,7 @@ if (Test-Path -Path $jsonPath -PathType Leaf) {
     Write-Host 'moduleinfo.json not found!'
     exit 1    
 }
-If ($env:GITHUB_REF -like 'refs/tags/*') {
+If ($env:GITHUB_REF -like 'refs/tags/v*') {
     # pipeline release build, with version
     $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
     $version = $tag -replace '^v', ''
