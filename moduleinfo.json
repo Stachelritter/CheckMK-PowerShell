@@ -1,0 +1,18 @@
+﻿{
+    "Description":  "Unoffical PowerShell module for interacting with CheckMKs RESTful API to automate monitoring configuration and management tasks.",
+    "ModuleName":  "CheckMK",
+    "ModuleGUID":  "f4d70a86-be0c-42e5-b367-2c3ab7ee001c",
+    "HelpInfoURI":  "https://github.com/Stachelritter/CheckMK-PowerShell",
+    "ProjectURI":  "https://github.com/Stachelritter/CheckMK-PowerShell",
+    "LicenseUri":  "https://github.com/Stachelritter/CheckMK-PowerShell/blob/main/LICENSE",
+    "PowerShellVersion":  "5.1",
+    "CompatiblePSEditions": "Desktop",
+    "companyName":  "",
+    "moduleAuthor":  "Fabian Ascheberg",
+    "Tags": [
+        "CheckMK",
+        "Monitoring",
+        "Configuration",
+        "Automation"
+    ]
+}

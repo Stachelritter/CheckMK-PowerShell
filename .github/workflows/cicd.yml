@@ -1,0 +1,81 @@
+name: Build and Publish
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'moduleinfo.json'
+      - 'build.ps1'
+      - '.github/workflows/**'
+  release:
+    types:
+      - published
+
+env: 
+  POWERSHELL_TELEMETRY_OPTOUT: 1
+
+jobs: 
+  build:
+    name: Build Module
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Invoke Build script
+        shell: pwsh
+        run: |
+          & .\build.ps1
+      
+      - name: Upload artifacts to GitHub
+        uses: actions/upload-artifact@v7
+        with:
+          name: Module
+          path: ./CheckMK/
+          if-no-files-found: error
+
+  publish: 
+    name: Publish to PowerShellGallery
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'release'
+    runs-on: windows-latest
+    needs: build
+    steps: 
+      - name: Restore Built PowerShell-Module
+        uses: actions/download-artifact@v8
+        with:
+          name: Module
+          path: ./CheckMK/
+
+      - name: Ensure NuGet and PowerShellGet are available
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+          if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+          }
+          Install-Module PackageManagement -Force -AllowClobber -Scope CurrentUser
+          Install-Module PowerShellGet -Force -AllowClobber -Scope CurrentUser
+          New-Item -ItemType Directory -Path 'C:\ProgramData\Microsoft\Windows\PowerShell\PowerShellGet' -Force
+          $env:PATH += ';C:\ProgramData\Microsoft\Windows\PowerShell\PowerShellGet'
+          Invoke-WebRequest -Uri 'https://aka.ms/psget-nugetexe' -OutFile 'C:\ProgramData\Microsoft\Windows\PowerShell\PowerShellGet\NuGet.exe'
+        
+      - name: Publish script to PowerShell Gallery
+        shell: pwsh
+        env: 
+          PSGALLERY_SECRET: ${{ secrets.PSGALLERY_SECRET}}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:NUGET_CLI_LANGUAGE="en_US"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          $parameters = @{
+            NuGetApiKey = $env:PSGALLERY_SECRET
+            Path = "./CheckMK/"
+          }
+          Publish-Module @parameters
